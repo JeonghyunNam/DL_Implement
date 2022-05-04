@@ -1,60 +1,60 @@
-import argparse
-import os
+#################################################################
+#   Goal :      Implement dcgan structure described in paper    #
+#   Direction : Modularization                                  #
+#################################################################
+
 import random
-from re import M
+from turtle import down
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
+import torch.functional as F
+
 import torch.optim as optim
+
 import torch.utils.data
+
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
-import numpy as np
+
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+import matplotlib.animation as anim
 from IPython.display import HTML
 
-## Set random Seed for reproductivility
+import os
+
+## Radom seed
 manualSeed = 999
 random.seed(manualSeed)
-torch.manual_seed(manualSeed)   #Note that set torch seed
+torch.manual_seed(manualSeed)
 
-## Input Definition
-dataroot = "C:/Users/ys499/data/celeba"
-workers = 2             # num_of_thread_for_dataloader
-batch_size = 128        # mini_batch size
-image_size = 64         # resized_input_image
-nc = 3                  # input_imae_channel_size
-nz = 100                # latent_vector_size(input_of_generator)
-ngf = 64                # dim_of_feature_generator
-ndf = 64                # dim_of_feature_discriminator
-num_epochs = 5          # total_epoch_num
-lr = 0.0002             # learning_rate
-beta1 = 0.5             # Adam_optimizers_rate1
-ngpu = 1                # gpu_num
+## Parameters
+dataroot = 'C:/Users/ys499/data/MNIST'           # data directory
+ckptroot = "./checkpointMNIST"
+workers = 2             # # of thread
+batch_size = 128        # # of mini_batch
+image_size = 64         # output of generater 3*64*64
+nc = 1                  # dim of output channel
+nz = 100                # dim of input noise
+ngf = 128               # dim of generator feature
+ndf = 128                # dim of discriminator feature
+num_epochs = 5          # # of epoch
+lr = 0.0002             # learning rate
+beta1 = 0.5             # coeff of Adam optim
+ngpu = 1                # # of gpu operating
 
-
-
-## Weight Initialization
-def weights_init(m):
-    classname = m.__class__.__name__    # reference method of getting classname
-    if classname.find('Conv') != -1:    # -1 = does not exist
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-## Generator Class
+## Generator
 class Generator(nn.Module):
     def __init__(self, ngpu):
         super(Generator, self).__init__()
         self.ngpu = ngpu
+        self.batchnorm = nn.BatchNorm2d(ngf*8)
+        self.linear = nn.Linear(100, ngf*8*4*4, bias=False)
+        self.relu = nn.ReLU(True)
         self.main = nn.Sequential(
-            nn.ConvTranspose2d(nz, ngf*8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf*8),
-            nn.ReLU(True),
 
             nn.ConvTranspose2d(ngf*8, ngf*4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf*4),
@@ -73,6 +73,9 @@ class Generator(nn.Module):
         )
 
     def forward(self, input):
+        # inter = torch.tensordot(input, self.proj, dims= ([1,2,3],[0,3,2]))
+        b_size = input.size(0)
+        input = self.relu(self.batchnorm(self.linear(input.reshape(b_size, 1, 1, nz)).reshape(b_size, ngf*8 ,4, 4)))
         return self.main(input)
 
 ## Discriminator Class
@@ -80,8 +83,12 @@ class Discriminator(nn.Module):
     def __init__(self, ngpu):
         super(Discriminator, self).__init__()
         self.ngpu = ngpu
+        self.proj = nn.Parameter(torch.normal(0, 0.02, size=(1, ngf*8*4*4, 1)))
+        self.sigmoid = nn.Sigmoid()
+        self.proj.requires_grad = True
         self.main = nn.Sequential(
             nn.Conv2d(nc, ndf, 4, 2, 1, bias = False),
+            nn.BatchNorm2d(ndf),
             nn.LeakyReLU(0.2, inplace = True),
 
             nn.Conv2d(ndf, ndf*2, 4, 2, 1, bias = False),
@@ -95,29 +102,41 @@ class Discriminator(nn.Module):
             nn.Conv2d(ndf*4, ndf*8, 4, 2, 1, bias = False),
             nn.BatchNorm2d(ndf*8),
             nn.LeakyReLU(0.2, inplace = True),
-
-            nn.Conv2d(ndf *8, 1, 4, 1, 0, bias = False),
-            nn.Sigmoid()
         )
 
     def forward(self, input):
-        return self.main(input)
+        b_size = input.size(0)
+        inter = self.main(input)
+        # inter = torch.matmul(torch.reshape(inter, (-1,ngf*8*4*4)),self.proj.reshape([ngf*8*4*4, -1]))
+        inter = inter.reshape(b_size, 1, -1)
+        inter = torch.bmm(inter, self.proj.repeat(b_size, 1, 1))
+        return inter
 
+## Weight Initialization
+def weights_init(m):
+    classname = m.__class__.__name__    # reference method of getting classname
+    if classname.find('Conv') != -1:    # -1 = does not exist
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
 ## main part
 
 if __name__ == '__main__':
     ## Data preparation
-    dataset = dset.ImageFolder(root = dataroot,
+    dataset = dset.MNIST(root = dataroot,
         transform=transforms.Compose([
             transforms.Resize(image_size),
             transforms.CenterCrop(image_size),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
+            transforms.Normalize((0.5,), (0.5,)),
+        ]),
+        train = True,
+        download=True
     )
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size,
-                            shuffle=True, num_workers=workers)
+                            shuffle=True, num_workers=0)
 
     device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0 ) else "cpu")
 
@@ -138,14 +157,15 @@ if __name__ == '__main__':
 
     netG.apply(weights_init)
     netD.apply(weights_init)
-
+    #print(list(netG.parameters()))
+    #print(list(netD.parameters()))
     print(netG)
     print(netD)
 
     # Loss Function & Optimizer
-    criterion = nn.BCELoss()
+    criterion = nn.BCEWithLogitsLoss()
 
-    fixed_noise = torch.randn(64, nz, 1, 1, device=device)
+    fixed_noise = torch.randn(128, nz, 1, 1, device=device)
 
     real_label = 1.
     fake_label = 0.
@@ -157,6 +177,8 @@ if __name__ == '__main__':
     G_losses = []
     D_losses = []
     iters = 0
+
+    os.makedirs(ckptroot, exist_ok=True)
 
     print("Starting Training Loop...")
 
@@ -172,8 +194,11 @@ if __name__ == '__main__':
             errD_real.backward()
             D_x = output.mean().item()
 
-            noise = torch.randn(b_size, nz, 1, 1, device = device)
+            noise = (torch.rand(b_size, nz, 1, 1, device = device)*2)-1
             fake = netG(noise)
+            if i%100 == 0:
+                # vutils.save_image(real_cpu, "./{0}/real_{1}.jpg".format( ckptroot, str(i).zfill(5), normalize=True, value_range=(-1,1)))
+                vutils.save_image(fake, "./{0}/{1}_{2}.jpg".format( ckptroot, str(epoch).zfill(2), str(i).zfill(5), normalize=True, value_range=(-1,1) ))
             label.fill_(fake_label)
             output = netD(fake.detach()).view(-1)
             errD_fake = criterion(output, label)
@@ -218,9 +243,6 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(8,8))
     plt.axis("off")
     ims = [[plt.imshow(np.transpose(i,(1,2,0)), animated=True)] for i in img_list]
-    ani = animation.ArtistAnimation(fig, ims, interval=1000, repeat_delay=1000, blit=True)
-
-    HTML(ani.to_jshtml())
 
     real_batch = next(iter(dataloader))
 
