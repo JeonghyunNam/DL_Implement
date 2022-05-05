@@ -4,6 +4,7 @@
 #################################################################
 
 import random
+from tkinter import W
 from turtle import down
 import numpy as np
 
@@ -32,12 +33,12 @@ random.seed(manualSeed)
 torch.manual_seed(manualSeed)
 
 ## Parameters
-dataroot = 'C:/Users/ys499/data/MNIST'           # data directory
-ckptroot = "./checkpointMNIST"
+dataroot = 'C:/Users/ys499/data/celeba'           # data directory
+ckptroot = "./checkpointdibugg"
 workers = 2             # # of thread
 batch_size = 128        # # of mini_batch
-image_size = 64         # output of generater 3*64*64
-nc = 1                  # dim of output channel
+image_size = 64         # output of generater 3*image * image
+nc = 3                  # dim of output channel
 nz = 100                # dim of input noise
 ngf = 128               # dim of generator feature
 ndf = 128                # dim of discriminator feature
@@ -124,19 +125,17 @@ def weights_init(m):
 
 if __name__ == '__main__':
     ## Data preparation
-    dataset = dset.MNIST(root = dataroot,
+    dataset = dset.ImageFolder(root = dataroot,
         transform=transforms.Compose([
             transforms.Resize(image_size),
             transforms.CenterCrop(image_size),
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,)),
         ]),
-        train = True,
-        download=True
     )
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size,
-                            shuffle=True, num_workers=0)
+                            shuffle=True, num_workers=workers)
 
     device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0 ) else "cpu")
 
@@ -157,8 +156,7 @@ if __name__ == '__main__':
 
     netG.apply(weights_init)
     netD.apply(weights_init)
-    #print(list(netG.parameters()))
-    #print(list(netD.parameters()))
+
     print(netG)
     print(netD)
 

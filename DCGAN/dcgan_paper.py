@@ -1,8 +1,8 @@
-#################################################################
-#   Goal :      Implement dcgan structure described in paper    #
-#   Direction : Modularization                                  #
-#   Acknowledge : Sunghyeon Kim
-#################################################################
+############################################################################
+#   Goal            :      Implement dcgan structure described in paper    #
+#   Direction       : Modularization                                       #
+#   Acknowledgement : Sunghyeon Kim                                        #
+############################################################################
 
 import random
 import numpy as np
