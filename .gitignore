@@ -1,0 +1,4 @@
+ALEXNET/Exp
+Transformer/wandb
+*.ptl
+*.pth

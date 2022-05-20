@@ -12,7 +12,7 @@ import torch.utils.data
 import torch.nn.functional as F
 
 ## MovieDataset
-class MovieDataSet(torch.utls.data.Dataset):
+class MovieDataSet(torch.utils.data.Dataset):
     def __init__(self, vocab, infile):
         self.vocab = vocab
         self.labels = []

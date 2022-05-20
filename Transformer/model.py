@@ -39,7 +39,7 @@ class ScalarDotProductAttention(nn.Module):
     def __init__(self, config) -> None:
         super(ScalarDotProductAttention, self).__init__()
         self.config = config
-        # self.dropout = nn.Dropout(config.dropout)
+        self.dropout = nn.Dropout(config.dropout)
         self.scaler = 1 / (self.config.d_head ** 0.5)
 
     def forward(self, Q, K, V, attn_mask):
@@ -61,7 +61,7 @@ class MultiHeadAttention(nn.Module):
         self.W_Q = nn.Linear(self.config.d_hidden, self.config.n_head * self.config.d_head)
         self.W_K = nn.Linear(self.config.d_hidden, self.config.n_head * self.config.d_head)
         self.W_V = nn.Linear(self.config.d_hidden, self.config.n_head * self.config.d_head)
-        self.scaled_dot_attn = ScalarDotProductAttention(self.config.d_head)
+        self.scaled_dot_attn = ScalarDotProductAttention(self.config)
         self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_hidden)
         #self.dropout = nn.Dropout(config.dropout)
 
@@ -74,7 +74,7 @@ class MultiHeadAttention(nn.Module):
         attn_mask = attn_mask.unsqueeze(1).repeat(1, self.config.n_head, 1, 1)
 
         context, attn_prob = self.scaled_dot_attn(q_s, k_s, v_s, attn_mask)
-        context = context.transpose(1, 2).contiguous().view(b_size, -1, self.config.n_head * self.d_head)
+        context = context.transpose(1, 2).contiguous().view(b_size, -1, self.config.n_head * self.config.d_head)
         
         output = self.linear(context)
         return output, attn_prob
@@ -126,13 +126,13 @@ class Decoderlayer(nn.Module):
         self.dec_enc_attn = MultiHeadAttention(self.config)
         self.layer_norm2 = nn.LayerNorm(self.config.d_hidden, eps = self.config.layer_norm_epsilon)
         self.pos_ffn = PointWiseFeedForward(self.config)
-        self.layer_norm3 = nn.LayerNorm(self.config.d_hidden, eps = self.config.layer_norm)
+        self.layer_norm3 = nn.LayerNorm(self.config.d_hidden, eps = self.config.layer_norm_epsilon)
 
     def forward(self, dec_inputs, enc_outputs, self_attn_mask, dec_enc_attn_mask):
         self_attn_outputs , self_attn_prob = self.self_attn(dec_inputs, dec_inputs, dec_inputs, self_attn_mask)
         self_attn_outputs = self.layer_norm1(dec_inputs + self_attn_outputs)
         dec_enc_attn_outputs, dec_enc_attn_prob = self.dec_enc_attn(self_attn_outputs, enc_outputs, enc_outputs, dec_enc_attn_mask)
-        dec_enc_attn_outputs = self.layer_norm2(self_attn_outputs, dec_enc_attn_outputs)
+        dec_enc_attn_outputs = self.layer_norm2(self_attn_outputs + dec_enc_attn_outputs)
         ffn_outputs = self.pos_ffn(dec_enc_attn_outputs)
         ffn_outputs = self.layer_norm3(dec_enc_attn_outputs + ffn_outputs)
 
@@ -149,9 +149,9 @@ class Encoder(nn.Module):
         self.layers = nn.ModuleList([Encoderlayer(self.config) for _ in range(self.config.n_layer)])
 
     def forward(self, inputs):
-        positions = torch.arange(inputs.size(1), device=inputs.device, dtype= inputs.dtype).expand(inputs.size(0), inputs.size(1)).configuous() + 1
+        positions = torch.arange(inputs.size(1), device=inputs.device, dtype= inputs.dtype).expand(inputs.size(0), inputs.size(1)).contiguous() + 1
         pos_mask = inputs.eq(self.config.i_padding)
-        positions.mask_fill_(pos_mask, 0)
+        positions.masked_fill_(pos_mask, 0)
 
         outputs = self.enc_emb(inputs) + self.pos_emb(positions)
 
@@ -186,11 +186,11 @@ class Decoder(nn.Module):
         dec_self_attn_mask = torch.gt((dec_attn_pad_mask + dec_attn_decoder_mask), 0)
         dec_enc_attn_mask = get_attn_pad_mask(dec_inputs, enc_inputs, self.config.i_padding)
 
-        self_attn_probs, dec_enc_attn_prob = [], []
+        self_attn_probs, dec_enc_attn_probs = [], []
         for layer in self.layers:
             dec_outputs, self_attn_prob, dec_enc_attn_prob = layer(dec_outputs, enc_outputs, dec_self_attn_mask, dec_enc_attn_mask)
             self_attn_probs.append(self_attn_prob)
-            dec_enc_attn_prob.append(dec_enc_attn_prob)
+            dec_enc_attn_probs.append(dec_enc_attn_prob)
         
         return dec_outputs, self_attn_probs, dec_enc_attn_prob
 
@@ -236,42 +236,3 @@ class MovieClassification(nn.Module):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
         return save["epoch"], save["loss"], save["score"]
-
-
-
-
-
-if __name__ == '__main__':
-    n_seq = 64
-    pos_encoding = get_sinusoid_encoding_table(n_seq, d_hidden)
-
-    print(pos_encoding.shape)
-    plt.pcolormesh(pos_encoding, cmap = 'RdBu')
-    plt.xlabel('Depth')
-    plt.ylabel('Position')
-    plt.xlim(0, d_hidden)
-    plt.colorbar()
-    # plt.show()
-
-    pos_encoding = torch.FloatTensor(pos_encoding)
-    nn_pos = nn.Embedding.from_pretrained(pos_encoding, freeze= True)
-
-    positions = torch.arange(inputs.size(1), device= inputs.device, dtype= inputs.dtype).expand(inputs.size(0),inputs.size(1)).contiguous()+1
-    pos_mask = inputs.eq(0)
-    positions.masked_fill_(pos_mask, 0)
-    pos_embs = nn_pos(positions)
-    # print(inputs)
-    # print(positions)
-    # print(pos_embs.size())
-
-    input_sums = input_emb + pos_embs   # input of Transformer
-
-    ## test
-    Q = input_sums
-    K = input_sums
-    V = input_sums
-    attn_mask = inputs.eq(0).unsqueeze(1).expand(Q.size(0), Q.size(1), K.size(1))
-    # print(attn_mask.size())
-    # print(attn_mask[0])
-    # net = ScalarDotProductAttention(512)
-    # net.forward(Q, K ,V, attn_mask)
