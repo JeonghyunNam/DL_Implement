@@ -1,4 +1,5 @@
 ALEXNET/Exp
 Transformer/wandb
+ResNet/saved
 *.ptl
 *.pth
