@@ -1,9 +1,8 @@
-from sklearn.preprocessing import KernelCenterer
 import torch
 import torch.nn as nn
 import torchvision.utils
-import numpy as np
 
+import math
 # import
 
 class VGGNet(nn.Module):
@@ -13,12 +12,12 @@ class VGGNet(nn.Module):
         self.module = self.make_Conv(self.module)
 
         self.convlayer = nn.Sequential(*self.module)
-        self.linlayer = nn.Sequential(nn.Linear(4096, 4096),
+        self.linlayer = nn.Sequential(nn.Linear(512, 4096),
                                       nn.ReLU(True),
                                       nn.Linear(4096, 4096),
                                       nn.ReLU(True),
-                                      nn.Linear(4096, 1000),
-                                      nn.Softmax(1000))
+                                      nn.Linear(4096, 100),
+                                      )
 
     def make_Conv(self, module):
         _size = [3, 64, 128, 256, 512, 512]
@@ -37,10 +36,14 @@ class VGGNet(nn.Module):
             module.append(nn.ReLU(True))
         module.append(nn.MaxPool2d(kernel_size=2, stride=2))
         return module
-
-    def forward(image):
-
-
+        
+    def forward(self, x):
+        x = self.convlayer(x)
+        x = x.reshape(x.shape[0], -1)
+        # print(x.size())
+        x = self.linlayer(x)
+        return x
 
 if __name__ == '__main__':
-    vgg = VGGNet()
+    model = VGGNet()
+    
