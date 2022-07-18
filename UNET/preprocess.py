@@ -50,18 +50,28 @@ if __name__ == '__main__':
 
     for idx, picture in enumerate(train_img):
         result = slice(overlapTile(picture))
-        os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\train\\'), exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\train\\Image\\'), exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\val\\Image\\'), exist_ok=True)
+
         for i in range(4):
             im = Image.fromarray(result[i])
-            title = os.path.join(os.getcwd(),'UNET\\data\\train\\')+str(4*idx+i)+'.jpg'
+            if idx < len(train_img)-3:
+                title = os.path.join(os.getcwd(),'UNET\\data\\train\\Image\\')+str(4*idx+i)+'.jpg'
+            else:
+                title = os.path.join(os.getcwd(),'UNET\\data\\val\\Image\\')+str(4*(idx+3-len(train_img))+i)+'.jpg'
             im.save(title, 'JPEG')
 
     for idx, picture in enumerate(label_img):
         result = slice(overlapTile(picture))
-        os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\label\\'), exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\train\\label\\'), exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\val\\label\\'), exist_ok=True)
+
         for i in range(4):
             im = Image.fromarray(result[i])
-            title = os.path.join(os.getcwd(),'UNET\\data\\label\\')+str(4*idx+i)+'.jpg'
+            if idx < len(label_img)-3:
+                title = os.path.join(os.getcwd(),'UNET\\data\\train\\label\\')+str(4*idx+i)+'.jpg'
+            else:
+                title = os.path.join(os.getcwd(),'UNET\\data\\val\\label\\')+str(4*(idx+3-len(label_img))+i)+'.jpg' 
             im.save(title, 'JPEG')
 
 

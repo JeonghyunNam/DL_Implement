@@ -37,6 +37,9 @@ class UNet(nn.Module):
                      nn.ReLU(inplace= True),
                      nn.ConvTranspose2d(c_output_size, c_output_size//2, kernel_size=2, stride=2)
                     ]
+        if c_input_size < c_output_size:
+            layerlist+=[nn.Dropout(0.5)]
+            
         return nn.Sequential(*layerlist)
     
     def constructFinal(self):
