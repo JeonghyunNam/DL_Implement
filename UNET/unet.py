@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-
+import math
 
 class UNet(nn.Module):
     def __init__(self) -> None:
@@ -15,6 +15,7 @@ class UNet(nn.Module):
         self.uplayer2   = self.constructUp(512, 256)
         self.uplayer3   = self.constructUp(256, 128)
         self.final      = self.constructFinal()
+        self.softmax    = nn.Softmax(dim = 1)
 
     def constructDown(self, c_input_size, c_output_size):
         layerlist = []
@@ -69,9 +70,14 @@ class UNet(nn.Module):
         up1 = self.cropNconcat(down3,self.uplayer1(up0))
         up2 = self.cropNconcat(down2,self.uplayer2(up1))
         up3 = self.cropNconcat(down1,self.uplayer3(up2))
-        output = self.final(up3)
+        output = self.softmax(self.final(up3))
 
         return output
+
+def weights_init(m):
+    classname = m.__class__.__name__    # reference method of getting classname
+    if classname.find('Conv') != -1:    # -1 = does not exist
+        nn.init.normal_(m.weight.data, 0.0, 1/math.sqrt(288))
 
 if __name__ == '__main__':
     unet = UNet()
@@ -79,4 +85,4 @@ if __name__ == '__main__':
     # Testing model architecture
     input = torch.zeros(1,1, 572, 572)
     output = unet(input)
-    print(output.size())
+    print(output)

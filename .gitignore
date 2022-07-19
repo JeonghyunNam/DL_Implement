@@ -3,5 +3,6 @@ Transformer/wandb
 ResNet/saved
 VGG/saved
 UNET/data
+UNET/saved
 *.ptl
 *.pth
