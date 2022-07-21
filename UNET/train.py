@@ -133,7 +133,6 @@ def main():
                 label = label[:,:,92:92+388,92:92+388].type(torch.LongTensor)
                 image , label = image.to(device), label.reshape(-1,388,388).to(device)
                 output = model(image)
-                print(output.size())
                 loss = criterion(output, label)
                 val_loss += loss.item()
                 output = (output[0,1,:,:]>0).float()
@@ -143,18 +142,15 @@ def main():
         print(f"Train Loss: {train_loss}\nValidation Loss: {val_loss}")
 
         # #TODO: train tensorboard (train_loss)
-        # writer.add_scalar('train_loss', train_loss, epoch)
+        writer.add_scalar('train_loss', train_loss, epoch)
 
         # #TODO: valid tensorboard (val_loss)
-        # writer.add_scalar('valid_loss', val_loss, epoch)
-
-        # #TODO: accuracy tensorboard (currval_error)
-        # writer.add_scalar('accuracy (%)', currval_error, epoch)
+        writer.add_scalar('valid_loss', val_loss, epoch)
 
         # #TODO: epoch 10마다 저장 (epoch+1 % 10 == 0), 경로: model/VGG_{epoch+1}.pth
-        # if (((epoch+1) % 10 )== 0 or (epoch == 0)):
-        #     os.makedirs(p.save_path +'model/', exist_ok= True)
-        #     torch.save(model.state_dict(), p.save_path +'model/'+ (str)(epoch+1)+'.pth')
+        if (((epoch+1) % 10 )== 0 or (epoch == 0)):
+            os.makedirs(p.save_path +'model/', exist_ok= True)
+            torch.save(model.state_dict(), p.save_path +'model/'+ (str)(epoch+1)+'.pth')
 
     writer.close()
 
