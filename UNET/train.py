@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import torch.utils.data as dsets
+import torchvision.utils as vutils
 import math
 from skimage.measure import label
 import scipy.ndimage.morphology as mor
@@ -22,55 +23,57 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
-def calWmap(mask):
-    # return label Wamp as tensor
-    ## cal w_c
-    mask = mask.cpu().numpy()
-    pixel_map = np.unique(mask)
+# def calWmap(mask):
+#     # return label Wamp as tensor
+#     ## cal w_c
+#     mask = mask.cpu().numpy()
+#     pixel_map = np.unique(mask)
 
-    w_map = []
-    for i in range(len(pixel_map)):
-        n_pixel = np.count_nonzero(mask == pixel_map[i])
-        w_map.append(1/n_pixel)
+#     w_map = []
+#     for i in range(len(pixel_map)):
+#         n_pixel = np.count_nonzero(mask == pixel_map[i])
+#         w_map.append(1/n_pixel)
 
-    maximum = max(w_map)
-    nw_map = [i / maximum for i in w_map]
-    w_c = np.zeros((mask.shape))
+#     maximum = max(w_map)
+#     nw_map = [i / maximum for i in w_map]
+#     w_c = np.zeros((1, mask.shape[0], mask.shape[1]))
 
-    for i in range(len(pixel_map)):
-        w_c[mask == pixel_map[i]] = nw_map[i]
+#     for i in range(len(pixel_map)):
+#         w_c[:, mask[:,:]== pixel_map[i]] = nw_map[i]
 
-    cells = label(mask, connectivity=2)
-    bwgt = np.zeros(mask.shape)
+#     cells = label(mask, connectivity=2)
+#     bwgt = np.zeros(mask.shape)
 
-    maps = np.zeros((mask.shape[1], mask.shape[2], np.amax(cells)))
-    if np.amax(cells) >= 2:
-        for ci in range(np.amax(cells)):
-            maps[:,:,ci] = mor.distance_transform_edt(cells== ci)
-        maps = np.sort(maps, axis=0)
-        d1 = maps[:,:,0]
-        d2 = maps[:,:,1]
+#     maps = np.zeros((mask.shape[0], mask.shape[1], np.amax(cells)))
+#     if np.amax(cells) >= 2:
+#         for ci in range(np.amax(cells)):
+#             maps[:,:,ci] = mor.distance_transform_edt(cells== ci)
+#         maps = np.sort(maps, axis=0)
+#         d1 = maps[:,:,0]
+#         d2 = maps[:,:,1]
 
-        bwgt = 10*np.exp(-(np.multiply((d1+d2),(d1+d2))/50))
+#         bwgt = 10*np.exp(-(np.multiply((d1+d2),(d1+d2))/50))
 
-    w = w_c + bwgt
-    wmax = np.amax(w)
-    w /= wmax
-    # print(w)
-    return w
+#     w = w_c + bwgt
+#     # wmax = np.amax(w)
+#     # w /= wmax
+#     # print(w)
+#     return w
 
-def CustomLoss(output, label):
+# def CustomLoss(output, label):
+#     batch_size = output.size(0)
+#     loss = 0
+#     for i in range(batch_size):
+        
+#         w = torch.tensor(calWmap(label[i])).to('cuda:0').resize(388,388)
+#         # a = ((torch.log(output[i][0]).mul(1-label))+(torch.log(output[i][1]).mul(label))).sum()
+#         loss += w.mul((torch.log(output[i][0]).mul(1-label))+(torch.log(output[i][1]).mul(label))).sum()
+#     # print(f"output size: {output.size()}")
+#     # print(f"output size: {output[0].size()}")
+#     # print(loss.size())
 
-    batch_size = output.size(0)
-    loss = 0
-    for i in range(batch_size):
-        w = torch.tensor(calWmap(label[i])).to('cuda:0')
-        loss += w.mul((torch.log(output[i][0]).mul(1-label))+(torch.log(output[i][1]).mul(label))).sum()
-    # print(f"output size: {output.size()}")
-    # print(f"output size: {output[0].size()}")
-    # print(loss.size())
-    # find l(x)
-    return loss/batch_size
+
+#     return loss/batch_size
 
 
 def main():
@@ -92,10 +95,11 @@ def main():
     model = u.UNet().to(device)
     model = nn.DataParallel(model, output_device=0)
     # model.apply(u.weights_init)
-    criterion = CustomLoss
+    # criterion = CustomLoss
+    criterion = nn.CrossEntropyLoss()
+    # optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.99)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9,0.999))
 
-    # preval_error = 0
     for epoch in range(p.max_epoch):
         print(f"Epoch: {epoch}")
         
@@ -105,8 +109,8 @@ def main():
         pbar1 = tqdm(enumerate(train_loader))
         for i, (image, label) in pbar1:
             optimizer.zero_grad()
-            label = label[:,:,92:92+388,92:92+388]
-            image , label = image.to(device), label.to(device)
+            label = label[:,:,92:92+388,92:92+388].type(torch.LongTensor)
+            image , label = image.to(device), label.reshape(-1, 388, 388).to(device)
             output = model(image)
 
             # HAVE To Implement LOSS Term!!!
@@ -118,37 +122,26 @@ def main():
             optimizer.step()
 
             pbar1.set_postfix({'loss': train_loss})
-        # train_loss /= i
+        train_loss /= i
         
-        # correct = 0
-        # samples = 0
-        # # test
-        # with torch.no_grad():
-        #     model.eval()
-        #     val_loss = 0
-        #     pbar2 = tqdm(enumerate(val_loader))
-        #     for i, (image, label) in pbar2:
-        #         image , label = image.to(device), label.to(device)
-        #         output = model(image)
-        #         loss = criterion(output, label)
-        #         val_loss += loss.item()
-        #         _, predict = torch.max(output.data, 1)
-        #         correct += (predict == label).sum().item()
-        #         samples += predict.size(0)      
+        # test
+        with torch.no_grad():
+            model.eval()
+            val_loss = 0
+            pbar2 = tqdm(enumerate(val_loader))
+            for i, (image, label) in pbar2:
+                label = label[:,:,92:92+388,92:92+388].type(torch.LongTensor)
+                image , label = image.to(device), label.reshape(-1,388,388).to(device)
+                output = model(image)
+                print(output.size())
+                loss = criterion(output, label)
+                val_loss += loss.item()
+                output = (output[0,1,:,:]>0).float()
+                vutils.save_image(output, "{0}{1}_{2}.jpg".format(p.save_path, str(epoch).zfill(2), str(i).zfill(5), normalize=True, value_range=(0,1)))   
+                pbar2.set_postfix({'loss': val_loss})
 
-        #         pbar2.set_postfix({'loss': loss})
-        #     val_loss /= i
-        # currval_error = 100.*correct/samples
+        print(f"Train Loss: {train_loss}\nValidation Loss: {val_loss}")
 
-        # if abs(currval_error - preval_error)<0.01:
-        #     optimizer.param_groups[0]['lr']/=10
-        #     print(optimizer.param_groups[0]['lr'])
-
-        # preval_error = currval_error
-
-        # print(f"Train Loss: {train_loss}\nValidation Loss: {val_loss}")
-        # print(f"Accuracy: {currval_error}")
-            
         # #TODO: train tensorboard (train_loss)
         # writer.add_scalar('train_loss', train_loss, epoch)
 

@@ -6,6 +6,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 def loadImage():
+    """
+        Load Images:
+        Convert tif image file to individual image files ndarray list
+    """
     dir_data = os.path.join(os.getcwd(),'UNET\\predata')
     origin_train_img = 'train-volume.tif'
     origin_label_img = 'train-labels.tif'
@@ -21,6 +25,12 @@ def loadImage():
     return np.stack(train_img_list), np.stack(label_img_list)
 
 def overlapTile(img_arr):
+    """ 
+        Overlap-Tile Strategy:
+        Implemented at Preprocessing stage
+        for using it directly at train step
+    """
+
     height, width = img_arr.shape[0], img_arr.shape[1]
 
     # Extend width
@@ -38,6 +48,11 @@ def overlapTile(img_arr):
     return result
 
 def slice(img):
+    """
+        Slicing(pad):
+        Crop image have size 572 * 572 (blue rectangle in paper)
+    """
+
     img_list = [img[0:572, 0:572],
                 img[0:572, 124:696],
                 img[124:696, 0:572],
@@ -47,9 +62,16 @@ def slice(img):
 
 if __name__ == '__main__':
     train_img, label_img = loadImage()
+    
+    """
+        If you don't use Overlap-tile strategy,
+        Just load images, and save it
+        i.e., Below code have to be changed
+    """
 
+    # Save train image 
     for idx, picture in enumerate(train_img):
-        result = slice(overlapTile(picture))
+        result = slice(overlapTile(picture))        
         os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\train\\Image\\'), exist_ok=True)
         os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\val\\Image\\'), exist_ok=True)
 
@@ -61,6 +83,7 @@ if __name__ == '__main__':
                 title = os.path.join(os.getcwd(),'UNET\\data\\val\\Image\\')+str(4*(idx+3-len(train_img))+i)+'.jpg'
             im.save(title, 'JPEG')
 
+    # Save validation image
     for idx, picture in enumerate(label_img):
         result = slice(overlapTile(picture))
         os.makedirs(os.path.join(os.getcwd(),'UNET\\data\\train\\label\\'), exist_ok=True)

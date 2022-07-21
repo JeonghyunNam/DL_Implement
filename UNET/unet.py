@@ -70,7 +70,7 @@ class UNet(nn.Module):
         up1 = self.cropNconcat(down3,self.uplayer1(up0))
         up2 = self.cropNconcat(down2,self.uplayer2(up1))
         up3 = self.cropNconcat(down1,self.uplayer3(up2))
-        output = self.softmax(self.final(up3))
+        output = self.final(up3)
 
         return output
 

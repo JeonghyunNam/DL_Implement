@@ -11,7 +11,7 @@ import Augmentor
 
 class CustomDataset(d.Dataset):
     def __init__(self, path, train = True):
-        self.path = path    #input path until train/val
+        self.path = path    # Input path until train/val
         self.img_path = path +'/Image/'
         self.label_path = path + '/Label/'
         self.train = train
@@ -23,7 +23,10 @@ class CustomDataset(d.Dataset):
     
     
     def __transform__(self, image, mask):
-
+        """
+            Image Augmentation
+            Have to be changed, but works well
+        """
         # Random horizontal flipping
         if random.random() > 0.5:
             image = F.hflip(image)
@@ -34,19 +37,22 @@ class CustomDataset(d.Dataset):
             image = F.vflip(image)
             mask = F.vflip(mask)
         
-        # Random rotating
+        # Random rotating (have to be chaged)
         # if random.random() > 0.5:
         #     deg = random.randint(0, 10)
         #     image = F.rotate(image, deg, interpolation=transforms.InterpolationMode.BILINEAR)
         #     mask = F.rotate(mask, deg, interpolation=transforms.InterpolationMode.BILINEAR)
         
-        # Elastic distortion
+        # Elastic distortion (have to be changed)
         # if random.random() > 0.5:
         #     image.gaussian_distortion(probability=1, grid_width=3, grid_height=3, magnitude=5, corner='bell', method='in')
         return image, mask
 
 
     def __getitem__(self, idx):
+        """
+            Convert image, label to Tensor datatype
+        """
         img_path = self.img_list[idx]
         label_path = self.label_list[idx]
         img, label = Image.open(img_path), Image.open(label_path)
@@ -60,6 +66,9 @@ class CustomDataset(d.Dataset):
         return img, label
 
 if __name__ == '__main__':
+    """
+        Confirm CustomDataset works well 
+    """
     dataset = CustomDataset('C:/Users/ys499/Desktop/DL_implement/UNET/data/train')
     dataloader = d.DataLoader(dataset=dataset, batch_size=1, shuffle=True, drop_last=False)
     sample = []
