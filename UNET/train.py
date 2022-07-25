@@ -7,8 +7,11 @@ import params as p
 import data
 import numpy as np
 import os
+from datetime import datetime
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.transforms as transforms
 import torch.utils.data as dsets
 import torchvision.utils as vutils
@@ -20,70 +23,32 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
+from scipy.spatial.distance import cdist
+
 import warnings
 warnings.filterwarnings('ignore')
 
-# def calWmap(mask):
-#     # return label Wamp as tensor
-#     ## cal w_c
-#     mask = mask.cpu().numpy()
-#     pixel_map = np.unique(mask)
-
-#     w_map = []
-#     for i in range(len(pixel_map)):
-#         n_pixel = np.count_nonzero(mask == pixel_map[i])
-#         w_map.append(1/n_pixel)
-
-#     maximum = max(w_map)
-#     nw_map = [i / maximum for i in w_map]
-#     w_c = np.zeros((1, mask.shape[0], mask.shape[1]))
-
-#     for i in range(len(pixel_map)):
-#         w_c[:, mask[:,:]== pixel_map[i]] = nw_map[i]
-
-#     cells = label(mask, connectivity=2)
-#     bwgt = np.zeros(mask.shape)
-
-#     maps = np.zeros((mask.shape[0], mask.shape[1], np.amax(cells)))
-#     if np.amax(cells) >= 2:
-#         for ci in range(np.amax(cells)):
-#             maps[:,:,ci] = mor.distance_transform_edt(cells== ci)
-#         maps = np.sort(maps, axis=0)
-#         d1 = maps[:,:,0]
-#         d2 = maps[:,:,1]
-
-#         bwgt = 10*np.exp(-(np.multiply((d1+d2),(d1+d2))/50))
-
-#     w = w_c + bwgt
-#     # wmax = np.amax(w)
-#     # w /= wmax
-#     # print(w)
-#     return w
-
-# def CustomLoss(output, label):
-#     batch_size = output.size(0)
-#     loss = 0
-#     for i in range(batch_size):
-        
-#         w = torch.tensor(calWmap(label[i])).to('cuda:0').resize(388,388)
-#         # a = ((torch.log(output[i][0]).mul(1-label))+(torch.log(output[i][1]).mul(label))).sum()
-#         loss += w.mul((torch.log(output[i][0]).mul(1-label))+(torch.log(output[i][1]).mul(label))).sum()
-#     # print(f"output size: {output.size()}")
-#     # print(f"output size: {output[0].size()}")
-#     # print(loss.size())
-
-
-#     return loss/batch_size
+def CustomLoss(input, label, w):
+    """
+        Implementation of Pixelwise weighted crossentropy loss 
+    """
+    output = F.binary_cross_entropy(input=F.softmax(input, dim=1)[:,1,:,:], target=label, weight=w)
+    # print(f"output size: {output.size()}")
+    # print(f"output size: {output[0].size()}")
+    # print(loss.size())
+    return output
 
 
 def main():
     ## Dataset prepare
+    datestr = datetime.now().strftime('%m%d%H%M')
+    os.makedirs(p.save_path + datestr+'/', exist_ok=True)
     train_dataset = data.CustomDataset(p.train_path, train= True)
 
     val_dataset = data.CustomDataset(p.val_path, train= False)
 
     train_loader = dsets.DataLoader(dataset=train_dataset, batch_size=12, shuffle=True, drop_last=False)
-    val_loader = dsets.DataLoader(dataset=val_dataset, batch_size= 12, shuffle=True, drop_last=False)
+    val_loader = dsets.DataLoader(dataset=val_dataset, batch_size=12, shuffle=True, drop_last=False)
 
     writer = SummaryWriter(p.save_path)
     
@@ -95,8 +60,8 @@ def main():
     model = u.UNet().to(device)
     model = nn.DataParallel(model, output_device=0)
     # model.apply(u.weights_init)
-    # criterion = CustomLoss
-    criterion = nn.CrossEntropyLoss()
+    criterion = CustomLoss
+    # criterion = nn.CrossEntropyLoss()
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.99)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9,0.999))
 
@@ -107,21 +72,20 @@ def main():
         model.train()
         train_loss = 0
         pbar1 = tqdm(enumerate(train_loader))
-        for i, (image, label) in pbar1:
+        for i, (image, label, weight) in pbar1:
             optimizer.zero_grad()
-            label = label[:,:,92:92+388,92:92+388].type(torch.LongTensor)
+            label = label[:,:,92:92+388,92:92+388].float()
+            weight = weight[:,:,92:92+388,92:92+388].float()
             image , label = image.to(device), label.reshape(-1, 388, 388).to(device)
+            weight = weight.reshape(-1, 388, 388).to(device)
             output = model(image)
-
-            # HAVE To Implement LOSS Term!!!
-            
-            loss = criterion(output, label)
+            loss = criterion(output, label, weight)
             # print(loss.size())
             train_loss += loss.item()
             loss.backward()
             optimizer.step()
 
-            pbar1.set_postfix({'loss': train_loss})
+            pbar1.set_postfix({'loss': loss.item()})
         train_loss /= i
         
         # test
@@ -129,15 +93,18 @@ def main():
             model.eval()
             val_loss = 0
             pbar2 = tqdm(enumerate(val_loader))
-            for i, (image, label) in pbar2:
-                label = label[:,:,92:92+388,92:92+388].type(torch.LongTensor)
+            for i, (image, label, weight) in pbar2:
+                label = label[:,:,92:92+388,92:92+388].float()
+                weight = weight[:,:,92:92+388,92:92+388].float()
                 image , label = image.to(device), label.reshape(-1,388,388).to(device)
+                weight = weight.reshape(-1, 388, 388).to(device)
                 output = model(image)
-                loss = criterion(output, label)
+                loss = criterion(output, label, weight)
                 val_loss += loss.item()
-                output = (output[0,1,:,:]>0).float()
-                vutils.save_image(output, "{0}{1}_{2}.jpg".format(p.save_path, str(epoch).zfill(2), str(i).zfill(5), normalize=True, value_range=(0,1)))   
-                pbar2.set_postfix({'loss': val_loss})
+                # output = torch.as_tensor((output[0,1,:,:]-0.5)>0,)
+                vutils.save_image(output[0,1:,:], "{0}{1}/{2}.jpg".format(p.save_path,datestr, str(epoch).zfill(2), normalize=True, value_range=[0,1]))   
+                pbar2.set_postfix({'loss': loss.item()})
+            val_loss /= i if i != 0 else val_loss
 
         print(f"Train Loss: {train_loss}\nValidation Loss: {val_loss}")
 
@@ -158,5 +125,3 @@ def main():
 if __name__ == "__main__":
     print("Main")
     main()
-    # input = torch.randint(0,2, (1,1,388,388))
-    # calWmap(input)

@@ -3,9 +3,8 @@ Transformer/wandb
 ResNet/saved
 VGG/saved
 UNET/data
-UNET/saved
-GAN/saved
-GAN/ckptroot
-DAtaset/
+UNET/saved/
+UNET/UNET/data
+
 *.ptl
 *.pth
