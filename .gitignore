@@ -4,5 +4,8 @@ ResNet/saved
 VGG/saved
 UNET/data
 UNET/saved
+GAN/saved
+GAN/ckptroot
+DAtaset/
 *.ptl
 *.pth

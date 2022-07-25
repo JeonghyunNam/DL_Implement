@@ -1,20 +1,15 @@
-import torch
-import torch as nn
+import torch 
+import torch.nn as nn
+import torchvision.utils as dutils
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
-import torchvision.utils as vutils
 import torch.utils.data
-# ###########################################
-# have to check datapath in param.py
-# ###########################################
 
-def make_train_datasets(batchsize=100, dataroot = None):
-    train_dataset = dsets.CIFAR100(root= dataroot,
+def make_train_datasets(batchsize = 100, dataroot = None):
+    train_dataset = dsets.MNIST(root= dataroot,
             train= True,
-            transform= transforms.Compose([transforms.RandomResizedCrop(32),
-                                            transforms.RandomHorizontalFlip(),
-                                            transforms.ToTensor(),
-                                            transforms.Normalize(mean = [0.5,], std  = [0.5,])
+            transform= transforms.Compose([ transforms.ToTensor(),
+                                            # transforms.Normalize(mean = [0.5,], std  = [0.5,])
                                             ]),
         download= True)
     dataloader = torch.utils.data.DataLoader(train_dataset, batch_size= batchsize,
@@ -22,10 +17,9 @@ def make_train_datasets(batchsize=100, dataroot = None):
     return dataloader
 
 def make_val_datasets(batchsize = 100, dataroot = None):
-    test_dataset = dsets.CIFAR100(root= dataroot,
+    test_dataset = dsets.MNIST(root= dataroot,
             train= False,
-            transform= transforms.Compose([transforms.RandomResizedCrop(32),
-                                            transforms.ToTensor(),
+            transform= transforms.Compose([ transforms.ToTensor(),
                                             transforms.Normalize(mean = [0.5,], std  = [0.5,])
                                             ]),
         download=True)

@@ -1,50 +1,34 @@
+from shutil import register_unpack_format
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
 class Maxout(nn.Module):
-    """Class Maxout implements maxout unit introduced in paper by Goodfellow et al, 2013.
-    
-    :param in_feature: Size of each input sample.
-    :param out_feature: Size of each output sample.
-    :param n_channels: The number of linear pieces used to make each maxout unit.
-    :param bias: If set to False, the layer will not learn an additive bias.
-    """
-    
-    def __init__(self, in_features, out_features, n_channels, bias=True):
+    def __init__(self, n_input, n_output, n_linear):
         super().__init__()
         
-        self.in_features = in_features
-        self.out_features = out_features
-        self.n_channels = n_channels
-        self.weight = nn.Parameter(torch.Tensor(n_channels * out_features, in_features))
-        
-        if bias:
-            self.bias = nn.Parameter(torch.Tensor(n_channels * out_features))
-        else:
-            self.register_parameter('bias', None)
-            
+        self.n_input = n_input
+        self.n_output = n_output
+        self.n_linear = n_linear
+        self.layer = nn.Linear(n_input, n_output * n_linear)
+        self.maxpool = nn.MaxPool1d(self.n_linear)
         self.reset_parameters()
-    
-    def forward(self, input):
-        a = F.linear(input, self.weight, self.bias)
-        b = F.max_pool1d(a.unsqueeze(-3), kernel_size=self.n_channels)
-        return b.squeeze()
 
     def reset_parameters(self):
         irange = 0.005
-        nn.init.uniform_(self.weight, -irange, irange)
-        if self.bias is not None:
-            nn.init.uniform_(self.bias, -irange, irange)
+        nn.init.uniform_(self.layer.weight, -irange, irange)
+        nn.init.uniform_(self.layer.bias, -irange, irange)
 
+    def forward(self, input):
+        intermediate = self.layer(input)
+        output = F.max_pool1d(intermediate, kernel_size=self.n_linear)
+        return output
 
 class Generator(nn.Module):
     def __init__(self, n_input) -> None:
         super(Generator, self).__init__()
         self.n_input = n_input
-        self.maxout1 = Maxout(784,240, 5)
-        self.maxout2 = Maxout()
         self.layer = nn.Sequential( nn.Linear(self.n_input, 1200),
                                     nn.ReLU(inplace = True),
                                     nn.Linear(1200, 1200),
@@ -52,32 +36,57 @@ class Generator(nn.Module):
                                     nn.Linear(1200, 784),
                                     nn.Sigmoid()  
                                   )
+        for layer in self.layer:
+            self.reset_parameters(layer)
+        
+    def reset_parameters(self, layer):
+        irange = 0.05
+        if isinstance(layer, nn.Linear):
+            nn.init.uniform_(layer.weight, -irange, irange)
+            nn.init.uniform_(layer.bias, -irange, irange)
 
     def forward(self, input):
         output = self.layer(input)
         return output
 
 class Discriminator(nn.Module):
-    def __init__(self, n_batch) -> None:
+    def __init__(self) -> None:
         super(Discriminator, self).__init__()
-        self.n_batch = n_batch
-        self.layer = nn.Sequential( Maxout(n_channels=5, bias= True),
-                                    nn.Linear(240, 240),
-                                    nn.ReLU(inplace=True),
+        self.layer = nn.Sequential( Maxout(n_input=784, n_output=240, n_linear=5),
+                                    Maxout(n_input=240, n_output=240, n_linear=5),
                                     nn.Linear(240, 1),
                                     nn.Sigmoid()  
                                   )
+        for layer in self.layer:
+            if not isinstance(layer, Maxout):
+                self.reset_parameters(layer)
+        
+    def reset_parameters(self, layer):
+        irange = 0.005
+        if isinstance(layer, nn.Linear):
+            nn.init.uniform_(layer.weight, -irange, irange)
+            nn.init.uniform_(layer.bias, -irange, irange)
+
+    def forward(self, input):
+        output = self.layer(input)
+        return output
 
 
-
-def init_weights(m):
+def init_weights(m, irange):
     if isinstance(m, nn.Linear):
-        torch.nn.init.uniform_(m.weight, -0.05, 0.05)
+        torch.nn.init.uniform_(m.weight, -irange, irange)
 
 if __name__ == '__main__':
-    # g = Generator(100)
-    # g.apply(init_weights)
-    # for name, param in g.named_parameters():
-    #     if param.requires_grad:
-    #         print(f"{name} : {param.data}")
-    # print(g)
+    g = Generator(100)
+    d = Discriminator()
+
+    # test for Discriminator
+    d_input = torch.randn(10,784)
+    d_output = d(d_input)
+    
+    # test for Generator
+    g_input = torch.randn(10,100)
+    g_output = g(g_input)
+    print(d)
+    print(g)
+
