@@ -7,7 +7,9 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import random
-import Augmentor
+
+from scipy.ndimage.interpolation import map_coordinates
+from scipy.ndimage.filters import gaussian_filter
 
 class CustomDataset(d.Dataset):
     def __init__(self, path, train = True):
@@ -42,14 +44,18 @@ class CustomDataset(d.Dataset):
             weight = F.vflip(weight)
         
         # Random rotating (have to be chaged)
-        # if random.random() > 0.5:
-        #     deg = random.randint(0, 10)
-        #     image = F.rotate(image, deg, interpolation=transforms.InterpolationMode.BILINEAR)
-        #     mask = F.rotate(mask, deg, interpolation=transforms.InterpolationMode.BILINEAR)
+        if random.random() > 0.5:
+            deg = random.randint(0, 10)
+            image = F.rotate(image, deg, interpolation=transforms.InterpolationMode.BILINEAR)
+            mask = F.rotate(mask, deg, interpolation=transforms.InterpolationMode.BILINEAR)
+            weight = F.rotate(weight, deg, interpolation=transforms.InterpolationMode.BILINEAR)
         
         # Elastic distortion (have to be changed)
         # if random.random() > 0.5:
         #     image.gaussian_distortion(probability=1, grid_width=3, grid_height=3, magnitude=5, corner='bell', method='in')
+        
+        
+        
         return image, mask, weight
 
 

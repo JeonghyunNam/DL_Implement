@@ -50,7 +50,8 @@ def main():
     train_loader = dsets.DataLoader(dataset=train_dataset, batch_size=12, shuffle=True, drop_last=False)
     val_loader = dsets.DataLoader(dataset=val_dataset, batch_size=12, shuffle=True, drop_last=False)
 
-    writer = SummaryWriter(p.save_path)
+    tb_path = p.save_path + 'tb/'
+    writer = SummaryWriter(tb_path)
     
 
     ## GPU Specification
@@ -62,8 +63,8 @@ def main():
     # model.apply(u.weights_init)
     criterion = CustomLoss
     # criterion = nn.CrossEntropyLoss()
-    # optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.99)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.9,0.999))
+    # optimizer = torch.optim.SGD(model.parameters(), lr = 0.0001, momentum=0.99)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9,0.999))
 
     for epoch in range(p.max_epoch):
         print(f"Epoch: {epoch}")
@@ -94,6 +95,9 @@ def main():
             val_loss = 0
             pbar2 = tqdm(enumerate(val_loader))
             for i, (image, label, weight) in pbar2:
+                # plt.figure()
+                # plt.imshow(weight[0,0,:,:].numpy())
+                # plt.show()
                 label = label[:,:,92:92+388,92:92+388].float()
                 weight = weight[:,:,92:92+388,92:92+388].float()
                 image , label = image.to(device), label.reshape(-1,388,388).to(device)
@@ -101,10 +105,9 @@ def main():
                 output = model(image)
                 loss = criterion(output, label, weight)
                 val_loss += loss.item()
-                # output = torch.as_tensor((output[0,1,:,:]-0.5)>0,)
-                vutils.save_image(output[0,1:,:], "{0}{1}/{2}.jpg".format(p.save_path,datestr, str(epoch).zfill(2), normalize=True, value_range=[0,1]))   
+                vutils.save_image(output[0,0,:,:], "{0}{1}/{2}.jpg".format(p.save_path,datestr, str(epoch).zfill(2), normalize=True, value_range=[0,1]))   
                 pbar2.set_postfix({'loss': loss.item()})
-            val_loss /= i if i != 0 else val_loss
+            val_loss = val_loss / i if i != 0 else val_loss
 
         print(f"Train Loss: {train_loss}\nValidation Loss: {val_loss}")
 
@@ -114,7 +117,7 @@ def main():
         # #TODO: valid tensorboard (val_loss)
         writer.add_scalar('valid_loss', val_loss, epoch)
 
-        # #TODO: epoch 10마다 저장 (epoch+1 % 10 == 0), 경로: model/VGG_{epoch+1}.pth
+        # #TODO: epoch 10마다 저장 (epoch+1 % 10 == 0), 경로: model/UNET_{epoch+1}.pth
         if (((epoch+1) % 10 )== 0 or (epoch == 0)):
             os.makedirs(p.save_path +'model/', exist_ok= True)
             torch.save(model.state_dict(), p.save_path +'model/'+ (str)(epoch+1)+'.pth')

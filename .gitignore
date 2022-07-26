@@ -2,9 +2,8 @@ ALEXNET/Exp
 Transformer/wandb
 ResNet/saved
 VGG/saved
-UNET/data
 UNET/saved/
-UNET/UNET/data
+UNET/data/
 
 *.ptl
 *.pth
